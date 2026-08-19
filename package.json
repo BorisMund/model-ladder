@@ -1,0 +1,43 @@
+{
+  "name": "model-ladder",
+  "version": "0.1.0",
+  "description": "Ask the cheap model first, pay for the strong one only when the cheap answer is not good enough — with a budget and a cost record for every call.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "fixtures": "tsx scripts/generate-fixtures.ts",
+    "simulate": "tsx scripts/simulate.ts"
+  },
+  "keywords": [
+    "llm",
+    "cost",
+    "fallback",
+    "cascade",
+    "budget",
+    "escalation"
+  ],
+  "author": "Boris Mund",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
