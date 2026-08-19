@@ -1,5 +1,7 @@
 # model-ladder
 
+[![CI](https://github.com/BorisMund/model-ladder/actions/workflows/ci.yml/badge.svg)](https://github.com/BorisMund/model-ladder/actions/workflows/ci.yml)
+
 Ask the cheap model first. Pay for the strong one only when the cheap answer is not good enough — under a budget, with a cost record for every call.
 
 ## The number
@@ -10,15 +12,15 @@ Ask the cheap model first. Pay for the strong one only when the cheap answer is 
 |---|---|---|
 | Cheap model only | $3.71 | 84.2% |
 | Strong model only | $59.74 | 97.4% |
-| **Ladder** | **$18.67** | **96.8%** |
+| **Ladder** | **$13.53** | **97.2%** |
 
-**69% cheaper than always using the strong model, for 0.6 points of accuracy.**
+**77% cheaper than always using the strong model, for 0.2 points of accuracy.**
 
-26.2% of documents escalated. What asked for the escalation:
+16.8% of documents escalated. What asked for the escalation:
 
 | Reason | Documents |
 |---|---|
-| `ungrounded` — the vendor is nowhere in the document text | 88 |
+| `ungrounded` — the vendor is nowhere in the document text | 41 |
 | `missing-fields` — the model returned nothing for a required field | 26 |
 | `truncated` — the answer was cut off by the token limit | 17 |
 
@@ -70,7 +72,7 @@ The strong model costs 16× the cheap one per document ($0.0597 against $0.0037 
 cost per document = cheap + escalation_rate × strong
 ```
 
-At 26.2% that lands at $18.67 per 1000. Two consequences worth knowing before you adopt this:
+At 16.8% that lands at $13.53 per 1000. Two consequences worth knowing before you adopt this:
 
 1. **The escalation rate is the only knob that matters.** Doubling it costs you almost twice as much; halving it saves almost half. Tuning checks is tuning the bill.
 2. **The ladder stays cheaper until 94% of documents escalate.** Break-even is `1 − cheap/strong`. That is the honest worst case: even a badly tuned ladder rarely loses to always-strong — it just stops winning much.
@@ -88,18 +90,19 @@ Checks are plain functions returning a reason or `null`. Four ship with the pack
 | `whenInvalid(validate)` | Your validator rejected the shape. Wrap zod's `safeParse` and pass it. |
 | `whenUngrounded({ field, sourceText })` | A field that should appear verbatim in the document does not appear at all. |
 
-`whenUngrounded` is the one that pays for itself — 88 of the 131 escalations above — and the one with the most careful edges:
+`whenUngrounded` is the one that pays for itself — 41 of the 84 escalations above — and the one with the most careful edges:
 
 - **Documents with no text layer are skipped, not escalated.** There is nothing to compare against. Escalating every photo is not a rare fallback; it is changing the default model, at the default model's price. A fifth of the corpus is photos, and they cost the cheap price.
 - **Legal suffixes and case are normalised away.** `ACME Corp.` against a header reading `ACME CORPORATION` is the same company, not a fabrication. Without this, half the corpus escalates for nothing.
-- **Letter-spaced headings are glued back together.** PDF text layers produce `A C M E` routinely.
+- **Letter-spaced headings are glued back together.** PDF text layers produce `A C M E` routinely — and `G l o b e x   I n d u s t r i e s`, where the word boundary is lost along with the letter ones, so the comparison is also tried with every space removed.
+- **A name too short to ground is left alone.** One letter is a substring of nearly every document; escalating on it buys noise, and a genuinely empty field is `missing-fields`.
 - **Only verbatim fields can be grounded.** Totals are reformatted (`1 234,56` vs `1234.56`) and dates almost always are. Grounding them produces false alarms, not signal, so don't.
 
 ## Three rules that keep it safe
 
 1. **A provider that is down is not a reason to spend more.** If the cheap call throws, the run ends as `unavailable` and the strong model is never called. Retrying belongs to the caller; paying 16× to discover the network is broken belongs to nobody.
 2. **One rung, once.** No chains. A second re-read almost never rescues a document the first one missed, and chains multiply the bill quietly.
-3. **Out of budget degrades, it does not fail.** The cheap answer is returned with its reason attached. Turning "we are less sure about this one" into "we lost this document" is the worse outcome for everyone.
+3. **Out of budget degrades, it does not fail.** The cheap answer is returned with its reason attached. Turning "we are less sure about this one" into "we lost this document" is the worse outcome for everyone. The same holds when the budget counter itself is unreachable: whether budget is left is then unknown, and not knowing is never a reason to spend more.
 
 ## Budget
 
@@ -149,7 +152,7 @@ What would move the numbers on your corpus:
 
 ### `run(input): Promise<LadderOutcome<T>>`
 
-Never throws for an expected state. `attempts[]` carries the per-call token usage, cost and duration; `costUsd` is the run total.
+Never throws for an expected state — including a provider that fails, a budget counter that is unreachable, and an `onSpend` that throws. `attempts[]` carries the per-call token usage, cost and duration; `costUsd` is the run total. When something did throw, the error travels on the outcome and on the `SpendRecord` rather than being swallowed: a run that degraded for an unknown cause is a run nobody can fix.
 
 ## When you don't need this
 
@@ -169,7 +172,7 @@ Never throws for an expected state. `attempts[]` carries the per-call token usag
 
 ```bash
 npm install
-npm test          # 14 tests, no network
+npm test          # 19 tests, no network
 npm run fixtures  # regenerate the corpus from the seed
 npm run simulate  # print the table above
 ```

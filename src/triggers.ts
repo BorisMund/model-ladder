@@ -92,10 +92,33 @@ const LEGAL_SUFFIXES = [
   "gmbh", "ag", "bv", "nv", "oy", "ab", "as", "sa", "srl", "spa", "plc", "pte",
 ];
 
+/** Below this, a claim is a substring of almost any document. */
+const MIN_CLAIM_LENGTH = 2;
+
 function contains(haystack: string, needle: string): boolean {
   const text = normalize(haystack);
   const claim = normalize(needle);
-  return claim.length > 0 && text.includes(claim);
+
+  // A claim too short to verify is not evidence of a fabrication: one letter
+  // appears in nearly every document, so escalating on it buys noise. Absence
+  // of a real name is `missing-fields`, which runs before this check.
+  if (claim.length < MIN_CLAIM_LENGTH) {
+    return true;
+  }
+
+  if (text.includes(claim)) {
+    return true;
+  }
+
+  // Letter-spaced headings lose their word boundaries as well as their letter
+  // ones: `Globex Industries` extracts as `G l o b e x   I n d u s t r i e s`,
+  // which glues back to one token and never matches a two-word claim. Compare
+  // the space-free forms as well, so a spaced heading grounds a spaced name.
+  return spaceFree(text).includes(spaceFree(claim));
+}
+
+function spaceFree(value: string): string {
+  return value.replace(/ /g, "");
 }
 
 /**
@@ -118,7 +141,9 @@ export function normalize(value: string): string {
     .filter((word) => word.length > 0 && !LEGAL_SUFFIXES.includes(word));
 
   // Letter-spaced headings arrive as single characters; glue them back so
-  // "a c m e" and "acme" compare equal.
+  // "a c m e" and "acme" compare equal. A run of one is kept as it is rather
+  // than dropped: deleting it would erase the whole of a name like "E Corp",
+  // whose only surviving token is a single letter.
   const glued: string[] = [];
   let run = "";
   for (const word of words) {
@@ -126,13 +151,13 @@ export function normalize(value: string): string {
       run += word;
       continue;
     }
-    if (run.length > 1) {
+    if (run.length > 0) {
       glued.push(run);
+      run = "";
     }
-    run = "";
     glued.push(word);
   }
-  if (run.length > 1) {
+  if (run.length > 0) {
     glued.push(run);
   }
 
