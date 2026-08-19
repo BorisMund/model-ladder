@@ -18,8 +18,7 @@ interface Extracted {
   total: number | null;
 }
 
-// Prices are illustrative and live in the test, not in the package: this is
-// exactly how a user is expected to configure them.
+// Prices live in the caller's config, not in the package.
 const PRICING: PricingTable = {
   fast: { inputPer1M: 1, outputPer1M: 5 },
   strong: { inputPer1M: 15, outputPer1M: 75 },
@@ -121,7 +120,7 @@ describe("a provider that does not answer", () => {
     }).run({ text: "…" });
 
     expect(outcome.status).toBe("unavailable");
-    // The point: a broken network must not be answered by spending more money.
+    // A broken network must not be answered by spending more.
     expect(strong).not.toHaveBeenCalled();
     expect(outcome.costUsd).toBe(0);
   });
@@ -138,11 +137,10 @@ describe("a provider that does not answer", () => {
     if (outcome.status !== "degraded") return;
 
     expect(outcome.cause).toBe("provider");
-    // The document is not lost — it is returned with its reason attached.
+    // The document is not lost.
     expect(outcome.value.total).toBe(118);
     expect(outcome.reason.code).toBe("missing-fields");
-    // And the provider's own message travels with it: a caller that cannot see
-    // it cannot tell a timeout from a rejected key.
+    // With the provider's message, so a timeout is distinguishable from a bad key.
     expect((outcome.error as Error).message).toBe("timeout");
   });
 });
@@ -180,8 +178,7 @@ describe("budget", () => {
     expect(outcome.status).toBe("degraded");
     if (outcome.status !== "degraded") return;
 
-    // Whether budget is left is unknown, and not knowing is never a reason to
-    // spend more.
+    // The remaining budget is unknown, so we do not spend.
     expect(strong).not.toHaveBeenCalled();
     expect(outcome.cause).toBe("budget");
     expect((outcome.error as Error).message).toBe("connection refused");
@@ -243,7 +240,7 @@ describe("accounting", () => {
     }).run({ text: "…" });
 
     expect(outcome.status).toBe("fast");
-    // Ignored, but not silently: the accounting failure is reported.
+    // Ignored, but logged.
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
   });
@@ -287,8 +284,7 @@ describe("grounding a field in the source text", () => {
   });
 
   it("accepts a two-word name in a letter-spaced heading", async () => {
-    // `Globex Industries` extracts as `G l o b e x   I n d u s t r i e s`: the
-    // word boundary is lost along with the letter ones.
+    // The word boundary is lost along with the letter ones.
     const outcome = await ladder({
       fast: reply({ vendor: "Globex Industries", total: 118 }),
       escalateWhen: [grounded],
@@ -298,8 +294,8 @@ describe("grounding a field in the source text", () => {
   });
 
   it("does not escalate a name too short to ground", async () => {
-    // One letter is a substring of nearly every document. Escalating on it
-    // buys noise; an empty field is `missing-fields`, which runs first.
+    // One letter matches almost any document. An empty field would be caught
+    // by `missing-fields` first.
     const outcome = await ladder({
       fast: reply({ vendor: "E Corp.", total: 118 }),
       escalateWhen: [grounded],
@@ -327,8 +323,8 @@ describe("grounding a field in the source text", () => {
       escalateWhen: [grounded],
     }).run({ text: "" });
 
-    // A photo cannot ground anything. Escalating every photo is not a fallback,
-    // it is a change of default model.
+    // A photo grounds nothing, and escalating every one of them just changes
+    // the default model.
     expect(outcome.status).toBe("fast");
     expect(strong).not.toHaveBeenCalled();
   });

@@ -1,12 +1,9 @@
 /**
- * Builds the corpus the simulation runs on.
+ * Builds the corpus the simulation runs on: recorded replies, not live calls,
+ * so anyone who clones the repository gets the same numbers for free. Token
+ * counts and prices are real-world shaped; the answers are synthetic.
  *
- * These are recorded replies, not live calls: the numbers in the README have to
- * be reproducible by anyone who clones the repository, and a live benchmark
- * would give a different answer every run and cost money to repeat. The prices
- * and token counts are real-world shaped; the answers are synthetic.
- *
- * Seeded, so `npm run fixtures` reproduces the same corpus byte for byte.
+ * Seeded, so `npm run fixtures` reproduces it byte for byte.
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -52,16 +49,16 @@ const fixtures: Fixture[] = [];
 for (let index = 0; index < COUNT; index += 1) {
   const vendor = pick(VENDORS);
 
-  // A fifth of the corpus is photos and scans: no text layer at all. This is
-  // what keeps the simulation honest — grounding cannot help there.
+  // A fifth of the corpus is photos and scans with no text layer, where
+  // grounding cannot help.
   const hasTextLayer = random() > 0.2;
   const text = hasTextLayer ? documentText(vendor) : "";
 
   const inputTokens = hasTextLayer ? between(1_800, 3_400) : between(2_400, 4_200);
   const outputTokens = between(120, 260);
 
-  // How the cheap model does: mostly right; when wrong, it either invents a
-  // vendor, returns nothing, or gets cut off.
+  // The cheap model is mostly right. When wrong, it invents a vendor, returns
+  // nothing, or gets cut off.
   const roll = random();
   let fastVendor = vendor;
   let fastStop: "end" | "length" = "end";
@@ -73,7 +70,7 @@ for (let index = 0; index < COUNT; index += 1) {
   } else if (roll < 0.19) {
     fastStop = "length"; // truncated
   } else if (roll < 0.27) {
-    fastVendor = shorten(vendor); // right company, suffix dropped — NOT an error
+    fastVendor = shorten(vendor); // right company, suffix dropped: not an error
   }
 
   // The strong model is better, not perfect.

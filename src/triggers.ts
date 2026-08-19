@@ -1,11 +1,8 @@
 import type { EscalationCheck, EscalationReason, ModelReply } from "./types.js";
 
-/**
- * Ready-made escalation checks. All of them look only at the reply, never at a
- * network or a database — see the note on EscalationCheck for why.
- */
+/** Ready-made checks. All of them look only at the reply, never at the network. */
 
-/** The answer was cut off by the token limit, so it is incomplete by definition. */
+/** The answer hit the token limit, so it is incomplete. */
 export function whenTruncated<TInput, T>(): EscalationCheck<TInput, T> {
   return (reply) =>
     reply.stopReason === "length"
@@ -25,7 +22,7 @@ export function whenFieldsMissing<TInput, T extends object>(
   };
 }
 
-/** Your own validator rejected the shape. Pass zod's safeParse, or anything else. */
+/** Your validator rejected the shape. Wrap zod's safeParse, or anything else. */
 export function whenInvalid<TInput, T>(
   validate: (value: T) => { ok: boolean; detail?: string },
 ): EscalationCheck<TInput, T> {
@@ -42,20 +39,11 @@ export function whenInvalid<TInput, T>(
 
 /**
  * The strongest signal in practice: a field that should appear verbatim in the
- * source document does not appear there at all.
+ * document is nowhere in it. A model reading a company name off a logo, or
+ * inventing one, produces a plausible string with no source behind it.
  *
- * A model that reads a company name off a logo — or invents one — produces a
- * plausible string that is nowhere in the text. That is worth paying to
- * re-check. A field that merely looks odd is not.
- *
- * Two deliberate limits:
- *   - documents with no extractable text (photos, scans) are skipped, not
- *     escalated. There is nothing to compare against, and escalating all of
- *     them is not a rare fallback — it is changing the default model, at the
- *     default model's price.
- *   - only fields that appear verbatim can be checked this way. Totals are
- *     formatted (1 234,56 vs 1234.56) and dates are reformatted almost always,
- *     so grounding them produces false alarms, not signal.
+ * Only works for verbatim fields. Totals (1 234,56 vs 1234.56) and dates get
+ * reformatted, so grounding those gives false alarms rather than signal.
  */
 export function whenUngrounded<TInput, T extends object>(options: {
   field: keyof T & string;
@@ -79,14 +67,10 @@ export function whenUngrounded<TInput, T extends object>(options: {
   };
 }
 
-/** Below this, a "text layer" is page furniture, not content. */
+/** Below this, the "text layer" is page furniture rather than content. */
 const MIN_TEXT_LENGTH = 40;
 
-/**
- * Legal suffixes are the single biggest source of false alarms: the header says
- * ACME CORPORATION and the model answers "ACME Corp." Both name the same
- * company, and treating that as a fabrication would escalate half the corpus.
- */
+/** Dropped from both sides: "ACME Corp." and "ACME CORPORATION" are one company. */
 const LEGAL_SUFFIXES = [
   "corporation", "corp", "incorporated", "inc", "limited", "ltd", "llc", "llp",
   "gmbh", "ag", "bv", "nv", "oy", "ab", "as", "sa", "srl", "spa", "plc", "pte",
@@ -99,9 +83,8 @@ function contains(haystack: string, needle: string): boolean {
   const text = normalize(haystack);
   const claim = normalize(needle);
 
-  // A claim too short to verify is not evidence of a fabrication: one letter
-  // appears in nearly every document, so escalating on it buys noise. Absence
-  // of a real name is `missing-fields`, which runs before this check.
+  // One letter is a substring of almost any document, so it proves nothing.
+  // A genuinely empty field is `missing-fields`, which runs before this check.
   if (claim.length < MIN_CLAIM_LENGTH) {
     return true;
   }
@@ -110,10 +93,9 @@ function contains(haystack: string, needle: string): boolean {
     return true;
   }
 
-  // Letter-spaced headings lose their word boundaries as well as their letter
-  // ones: `Globex Industries` extracts as `G l o b e x   I n d u s t r i e s`,
-  // which glues back to one token and never matches a two-word claim. Compare
-  // the space-free forms as well, so a spaced heading grounds a spaced name.
+  // Letter-spacing loses word boundaries too: `Globex Industries` extracts as
+  // `G l o b e x   I n d u s t r i e s`, which glues back into one token and
+  // never matches a two-word claim.
   return spaceFree(text).includes(spaceFree(claim));
 }
 
@@ -122,9 +104,9 @@ function spaceFree(value: string): string {
 }
 
 /**
- * Normalisation for text-layer noise, not for prettiness. PDF extraction gives
- * back hyphenated line breaks, soft hyphens, non-breaking spaces and letter-
- * spaced headings (`A C M E`), none of which survive a naive `includes`.
+ * Strips the noise PDF extraction adds: soft hyphens, hyphenated line breaks,
+ * accents, punctuation and letter-spaced headings (`A C M E`), none of which
+ * survive a naive `includes`.
  */
 export function normalize(value: string): string {
   const flattened = value
@@ -140,10 +122,8 @@ export function normalize(value: string): string {
     .split(" ")
     .filter((word) => word.length > 0 && !LEGAL_SUFFIXES.includes(word));
 
-  // Letter-spaced headings arrive as single characters; glue them back so
-  // "a c m e" and "acme" compare equal. A run of one is kept as it is rather
-  // than dropped: deleting it would erase the whole of a name like "E Corp",
-  // whose only surviving token is a single letter.
+  // Glue runs of single characters back together, so "a c m e" matches "acme".
+  // A run of one is kept: it may be all that survives of a name like "E Corp".
   const glued: string[] = [];
   let run = "";
   for (const word of words) {

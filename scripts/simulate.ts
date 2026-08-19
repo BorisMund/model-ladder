@@ -1,8 +1,7 @@
 /**
  * Runs the corpus through three strategies and prints what each one costs.
- *
- * This is the number the README leads with, and it is produced by the package
- * itself — not typed in by hand. `npm run simulate` reproduces it.
+ * This is the table the README leads with, produced by the package rather than
+ * typed in by hand.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -30,10 +29,7 @@ interface Extracted {
   vendor: string;
 }
 
-/**
- * List prices per million tokens, in USD. Illustrative and deliberately
- * provider-neutral: swap in yours, the shape of the answer will not change.
- */
+/** List prices per million tokens, in USD. Swap in your own. */
 const PRICING: PricingTable = {
   fast: { inputPer1M: 1, outputPer1M: 5 },
   strong: { inputPer1M: 15, outputPer1M: 75 },

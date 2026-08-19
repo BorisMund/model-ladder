@@ -15,12 +15,12 @@ export interface LadderOptions<TInput, T> {
   fast: ModelSpec<TInput, T>;
   /** Tried at most once, and only when a check asks for it. */
   strong: ModelSpec<TInput, T>;
-  /** Checks run in order; the first one to object decides the reason. */
+  /** Run in order; the first to object supplies the reason. */
   escalateWhen: Array<EscalationCheck<TInput, T>>;
   pricing: PricingTable;
-  /** Optional cap on escalations. Without it, every refused answer is paid to re-run. */
+  /** Optional. Without it, every refused answer is paid to re-run. */
   budget?: EscalationBudget;
-  /** Called once per run with the full cost record. */
+  /** Called once per run, whatever the outcome. */
   onSpend?: (record: SpendRecord) => void;
 }
 
@@ -33,8 +33,7 @@ export function createLadder<TInput, T>(
 ): Ladder<TInput, T> {
   const { fast, strong, escalateWhen, pricing, budget, onSpend } = options;
 
-  // Fail on startup, not on the first document: a ladder that cannot cost its
-  // own calls is worse than no ladder, because the bill arrives anyway.
+  // Throw on startup rather than on the first document.
   const fastPrice = priceFor(pricing, fast.name);
   const strongPrice = priceFor(pricing, strong.name);
 
@@ -45,9 +44,9 @@ export function createLadder<TInput, T>(
     try {
       fastReply = await timed(fast.call, input, fast.name, fastPrice, attempts);
     } catch (error) {
-      // The cheap model never answered. Nothing is known about this input, so
-      // there is no answer to improve on — escalating here would pay the
-      // expensive model to find out that the network is broken.
+      // Nothing is known about this input yet, so there is no answer to
+      // improve on. Escalating would just pay the strong model to hit the
+      // same broken network.
       return finish({
         status: "unavailable",
         error,
@@ -66,17 +65,13 @@ export function createLadder<TInput, T>(
       });
     }
 
-    // One rung, once. A chain of escalations multiplies the bill quietly, and
-    // the second re-read almost never rescues a document the first one missed.
     if (budget) {
       let granted: boolean;
       try {
         granted = await budget.take();
       } catch (error) {
-        // The counter is unreachable, so whether there is budget left is
-        // unknown — and not knowing is never a reason to spend more. The
-        // counter usually lives in a database, and a database blip must cost
-        // certainty, not the document.
+        // The counter is usually a database, and it is unreachable, so the
+        // remaining budget is unknown. Degrade rather than spend on a guess.
         return finish({
           status: "degraded",
           value: fastReply.value,
@@ -100,6 +95,8 @@ export function createLadder<TInput, T>(
       }
     }
 
+    // One rung only. Chains of escalations multiply the bill, and a second
+    // re-read rarely rescues a document the first one missed.
     try {
       const strongReply = await timed(
         strong.call,
@@ -116,18 +113,11 @@ export function createLadder<TInput, T>(
         costUsd: total(attempts),
       });
     } catch (error) {
-      // The strong model was unreachable, but the cheap answer still exists and
-      // is usable — just less certain. Throwing here would turn "we are less
-      // sure about this one" into "we lost this document".
+      // The cheap answer still exists and is usable, just less certain, so
+      // hand it back with the provider's error attached.
       //
-      // The error travels with the outcome rather than being swallowed: a
-      // caller that cannot see the provider's own message cannot tell a
-      // timeout from a rejected key.
-      //
-      // The budget unit is deliberately NOT given back: whether a failed call
-      // is billable depends on the provider, and a package that guesses will
-      // guess wrong in someone's favour. Hand the run to `onSpend` and let the
-      // application decide.
+      // The budget unit is not given back: whether a failed call is billable
+      // depends on the provider, so leave that call to the application.
       return finish({
         status: "degraded",
         value: fastReply.value,
@@ -150,9 +140,8 @@ export function createLadder<TInput, T>(
         ...("error" in outcome ? { error: outcome.error } : {}),
       });
     } catch (error) {
-      // Reporting is not the job. A metrics sink that throws must not cost the
-      // caller a document that has already been paid for — and must not vanish
-      // either, or the first thing lost is the accounting it was added for.
+      // A broken metrics sink must not cost the caller a document that was
+      // already paid for. Log it rather than swallow it.
       console.error("[model-ladder] onSpend threw and was ignored:", error);
     }
     return outcome;

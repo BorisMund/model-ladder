@@ -7,18 +7,16 @@ export interface ModelPrice {
 }
 
 /**
- * Prices keyed by model name.
- *
- * Configuration, never a constant in the source: list prices change, and a
- * package that hardcodes them starts lying the week after it is published.
+ * Prices keyed by model name. Configuration, not a constant in here: list
+ * prices change, and a package that hardcodes them goes stale immediately.
  */
 export type PricingTable = Record<string, ModelPrice>;
 
 export class MissingPriceError extends Error {
   constructor(model: string) {
     super(
-      `No price configured for model "${model}". Every model on the ladder needs one — ` +
-        `a run that cannot be costed is a run you cannot budget.`,
+      `No price configured for model "${model}". Every model on the ladder needs one, ` +
+        `or its calls cannot be costed.`,
     );
     this.name = "MissingPriceError";
   }
@@ -32,7 +30,7 @@ export function priceFor(pricing: PricingTable, model: string): ModelPrice {
   return price;
 }
 
-/** Cost of one call. Rounded to six places — fractions of a cent add up over a month. */
+/** Cost of one call. Rounded to six places: fractions of a cent add up over a month. */
 export function costOf(usage: TokenUsage, price: ModelPrice): number {
   const cost =
     (usage.inputTokens / 1_000_000) * price.inputPer1M +
