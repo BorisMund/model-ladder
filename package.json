@@ -24,6 +24,15 @@
     "fixtures": "tsx scripts/generate-fixtures.ts",
     "simulate": "tsx scripts/simulate.ts"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BorisMund/model-ladder.git"
+  },
+  "homepage": "https://github.com/BorisMund/model-ladder#readme",
+  "bugs": {
+    "url": "https://github.com/BorisMund/model-ladder/issues"
+  },
+  "sideEffects": false,
   "keywords": [
     "llm",
     "cost",

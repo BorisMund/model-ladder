@@ -22,6 +22,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # The package ships `dist`. A typecheck proves the source is sound; only
+      # a build proves there is something to publish.
+      - run: npm run build
+
       # The README leads with a cost table. If the package stops producing it,
       # the number in the README is a claim nobody checked.
       - run: npm run simulate
