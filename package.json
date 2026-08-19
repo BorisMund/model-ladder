@@ -1,7 +1,7 @@
 {
   "name": "model-ladder",
   "version": "0.1.0",
-  "description": "Ask the cheap model first, pay for the strong one only when the cheap answer is not good enough — with a budget and a cost record for every call.",
+  "description": "Ask the cheap model first. Pay for the strong one only when the cheap answer fails a check, under a budget, with a cost record for every call.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
