@@ -4,6 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
+    // `console` and `node:*` are not ambient. The package declares Node in
+    // `engines`, so say so here instead of relying on tsc picking up whatever
+    // @types happen to be installed.
+    "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
