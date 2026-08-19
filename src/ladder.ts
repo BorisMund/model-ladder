@@ -39,9 +39,9 @@ export function createLadder<TInput, T>(
 
   async function run(input: TInput): Promise<LadderOutcome<T>> {
     const attempts: Attempt[] = [];
-
     let fastReply: ModelReply<T>;
     try {
+      // fastReply = await timed(fast.call, input, fast.name, fastPrice, attempts);
       fastReply = await timed(fast.call, input, fast.name, fastPrice, attempts);
     } catch (error) {
       // Nothing is known about this input yet, so there is no answer to

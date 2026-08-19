@@ -4,6 +4,7 @@ import {
   createLadder,
   MissingPriceError,
   whenFieldsMissing,
+  whenInvalid,
   whenTruncated,
   whenUngrounded,
 } from "../src/index.js";
@@ -254,6 +255,52 @@ describe("accounting", () => {
         pricing: PRICING,
       }),
     ).toThrow(MissingPriceError);
+  });
+});
+
+describe("a validator of your own", () => {
+  // The shape zod's safeParse already returns, minus the parsed data.
+  const totalIsPositive = whenInvalid<Doc, Extracted>((value) =>
+    value.total !== null && value.total > 0
+      ? { ok: true }
+      : { ok: false, detail: "total must be a positive number" },
+  );
+
+  it("accepts a value the validator approves", async () => {
+    const strong = vi.fn(reply({ vendor: "ACME", total: 1 }));
+    const outcome = await ladder({
+      fast: reply({ vendor: "ACME Corporation", total: 118 }),
+      strong,
+      escalateWhen: [totalIsPositive],
+    }).run({ text: "…" });
+
+    expect(outcome.status).toBe("fast");
+    expect(strong).not.toHaveBeenCalled();
+  });
+
+  it("escalates on rejection and passes the validator's message through", async () => {
+    const outcome = await ladder({
+      fast: reply({ vendor: "ACME Corporation", total: -4 }),
+      escalateWhen: [totalIsPositive],
+    }).run({ text: "…" });
+
+    expect(outcome.status).toBe("escalated");
+    if (outcome.status !== "escalated") return;
+
+    expect(outcome.reason).toEqual({
+      code: "schema-miss",
+      detail: "total must be a positive number",
+    });
+  });
+
+  it("omits detail when the validator gives none", async () => {
+    const outcome = await ladder({
+      fast: reply({ vendor: "ACME Corporation", total: -4 }),
+      escalateWhen: [whenInvalid<Doc, Extracted>(() => ({ ok: false }))],
+    }).run({ text: "…" });
+
+    if (outcome.status !== "escalated") throw new Error("expected an escalation");
+    expect(outcome.reason).toEqual({ code: "schema-miss" });
   });
 });
 

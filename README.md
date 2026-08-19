@@ -159,7 +159,7 @@ Left out on purpose:
 
 ```bash
 npm install
-npm test          # 19 tests, no network
+npm test          # 22 tests, no network
 npm run fixtures  # regenerate the corpus from the seed
 npm run simulate  # print the table above
 ```
