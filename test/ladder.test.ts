@@ -141,6 +141,9 @@ describe("a provider that does not answer", () => {
     // The document is not lost — it is returned with its reason attached.
     expect(outcome.value.total).toBe(118);
     expect(outcome.reason.code).toBe("missing-fields");
+    // And the provider's own message travels with it: a caller that cannot see
+    // it cannot tell a timeout from a rejected key.
+    expect((outcome.error as Error).message).toBe("timeout");
   });
 });
 
@@ -160,6 +163,28 @@ describe("budget", () => {
     expect(strong).not.toHaveBeenCalled();
     // Only the cheap call was billed.
     expect(outcome.costUsd).toBeCloseTo(0.003, 6);
+  });
+
+  it("degrades instead of spending when the budget counter is unreachable", async () => {
+    const strong = vi.fn(reply({ vendor: "ACME", total: 1 }));
+    const outcome = await ladder({
+      fast: reply({ vendor: "", total: 118 }),
+      strong,
+      budget: {
+        take: async () => {
+          throw new Error("connection refused");
+        },
+      },
+    }).run({ text: "…" });
+
+    expect(outcome.status).toBe("degraded");
+    if (outcome.status !== "degraded") return;
+
+    // Whether budget is left is unknown, and not knowing is never a reason to
+    // spend more.
+    expect(strong).not.toHaveBeenCalled();
+    expect(outcome.cause).toBe("budget");
+    expect((outcome.error as Error).message).toBe("connection refused");
   });
 
   it("does not touch the budget when the cheap answer is accepted", async () => {
@@ -191,6 +216,36 @@ describe("accounting", () => {
 
     expect(records.map((record) => record.status)).toEqual(["fast", "unavailable"]);
     expect(records[1]?.costUsd).toBe(0);
+  });
+
+  it("hands the provider error to onSpend, not just to the caller", async () => {
+    const records: SpendRecord[] = [];
+
+    await ladder({
+      fast: reply({ vendor: "", total: 118 }),
+      strong: async () => {
+        throw new Error("502");
+      },
+      onSpend: (record) => records.push(record),
+    }).run({ text: "…" });
+
+    expect((records[0]?.error as Error).message).toBe("502");
+  });
+
+  it("does not lose a paid-for document because the metrics sink threw", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const outcome = await ladder({
+      fast: reply({ vendor: "ACME Corporation", total: 118 }),
+      onSpend: () => {
+        throw new Error("statsd is down");
+      },
+    }).run({ text: "…" });
+
+    expect(outcome.status).toBe("fast");
+    // Ignored, but not silently: the accounting failure is reported.
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it("refuses to build a ladder whose models have no price", () => {
@@ -227,6 +282,28 @@ describe("grounding a field in the source text", () => {
       fast: reply({ vendor: "ACME", total: 118 }),
       escalateWhen: [grounded],
     }).run({ text: longEnough("A C M E   header block") });
+
+    expect(outcome.status).toBe("fast");
+  });
+
+  it("accepts a two-word name in a letter-spaced heading", async () => {
+    // `Globex Industries` extracts as `G l o b e x   I n d u s t r i e s`: the
+    // word boundary is lost along with the letter ones.
+    const outcome = await ladder({
+      fast: reply({ vendor: "Globex Industries", total: 118 }),
+      escalateWhen: [grounded],
+    }).run({ text: longEnough("G l o b e x   I n d u s t r i e s") });
+
+    expect(outcome.status).toBe("fast");
+  });
+
+  it("does not escalate a name too short to ground", async () => {
+    // One letter is a substring of nearly every document. Escalating on it
+    // buys noise; an empty field is `missing-fields`, which runs first.
+    const outcome = await ladder({
+      fast: reply({ vendor: "E Corp.", total: 118 }),
+      escalateWhen: [grounded],
+    }).run({ text: longEnough("Bill from ACME CORPORATION") });
 
     expect(outcome.status).toBe("fast");
   });

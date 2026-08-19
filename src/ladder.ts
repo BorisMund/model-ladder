@@ -68,15 +68,36 @@ export function createLadder<TInput, T>(
 
     // One rung, once. A chain of escalations multiplies the bill quietly, and
     // the second re-read almost never rescues a document the first one missed.
-    if (budget && !(await budget.take())) {
-      return finish({
-        status: "degraded",
-        value: fastReply.value,
-        reason,
-        cause: "budget",
-        attempts,
-        costUsd: total(attempts),
-      });
+    if (budget) {
+      let granted: boolean;
+      try {
+        granted = await budget.take();
+      } catch (error) {
+        // The counter is unreachable, so whether there is budget left is
+        // unknown — and not knowing is never a reason to spend more. The
+        // counter usually lives in a database, and a database blip must cost
+        // certainty, not the document.
+        return finish({
+          status: "degraded",
+          value: fastReply.value,
+          reason,
+          cause: "budget",
+          error,
+          attempts,
+          costUsd: total(attempts),
+        });
+      }
+
+      if (!granted) {
+        return finish({
+          status: "degraded",
+          value: fastReply.value,
+          reason,
+          cause: "budget",
+          attempts,
+          costUsd: total(attempts),
+        });
+      }
     }
 
     try {
@@ -94,10 +115,14 @@ export function createLadder<TInput, T>(
         attempts,
         costUsd: total(attempts),
       });
-    } catch {
+    } catch (error) {
       // The strong model was unreachable, but the cheap answer still exists and
       // is usable — just less certain. Throwing here would turn "we are less
       // sure about this one" into "we lost this document".
+      //
+      // The error travels with the outcome rather than being swallowed: a
+      // caller that cannot see the provider's own message cannot tell a
+      // timeout from a rejected key.
       //
       // The budget unit is deliberately NOT given back: whether a failed call
       // is billable depends on the provider, and a package that guesses will
@@ -108,6 +133,7 @@ export function createLadder<TInput, T>(
         value: fastReply.value,
         reason,
         cause: "provider",
+        error,
         attempts,
         costUsd: total(attempts),
       });
@@ -115,12 +141,20 @@ export function createLadder<TInput, T>(
   }
 
   function finish(outcome: LadderOutcome<T>): LadderOutcome<T> {
-    onSpend?.({
-      status: outcome.status,
-      costUsd: outcome.costUsd,
-      attempts: outcome.attempts,
-      ...("reason" in outcome ? { reason: outcome.reason } : {}),
-    });
+    try {
+      onSpend?.({
+        status: outcome.status,
+        costUsd: outcome.costUsd,
+        attempts: outcome.attempts,
+        ...("reason" in outcome ? { reason: outcome.reason } : {}),
+        ...("error" in outcome ? { error: outcome.error } : {}),
+      });
+    } catch (error) {
+      // Reporting is not the job. A metrics sink that throws must not cost the
+      // caller a document that has already been paid for — and must not vanish
+      // either, or the first thing lost is the accounting it was added for.
+      console.error("[model-ladder] onSpend threw and was ignored:", error);
+    }
     return outcome;
   }
 

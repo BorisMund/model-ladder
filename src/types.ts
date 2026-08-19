@@ -80,6 +80,12 @@ export interface SpendRecord {
   costUsd: number;
   attempts: Attempt[];
   reason?: EscalationReason;
+  /**
+   * What a provider or the budget counter threw, when something did. Reported
+   * rather than swallowed: a run that degraded for an unknown cause is a run
+   * nobody can fix.
+   */
+  error?: unknown;
 }
 
 export type LadderStatus = "fast" | "escalated" | "degraded" | "unavailable";
@@ -114,6 +120,12 @@ export type LadderOutcome<T> =
       value: T;
       reason: EscalationReason;
       cause: DegradeCause;
+      /**
+       * What the strong model or the budget counter threw. Absent for the
+       * ordinary case of a budget that is simply spent — that is an answer,
+       * not a failure.
+       */
+      error?: unknown;
       attempts: Attempt[];
       costUsd: number;
     }
