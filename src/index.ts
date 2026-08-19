@@ -7,6 +7,7 @@ export {
   whenInvalid,
   whenUngrounded,
   normalize,
+  LEGAL_SUFFIXES,
 } from "./triggers.js";
 
 export { costOf, priceFor, MissingPriceError } from "./pricing.js";

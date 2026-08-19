@@ -49,7 +49,15 @@ export function whenUngrounded<TInput, T extends object>(options: {
   field: keyof T & string;
   /** Text extracted from the source. Empty or missing means "cannot check". */
   sourceText: (input: TInput) => string | null | undefined;
+  /**
+   * Overrides the built-in list. Spread `LEGAL_SUFFIXES` to extend it instead.
+   * Entries are lowercase tokens as `normalize` produces them, so a form like
+   * `sp. z o.o.` is listed as "sp", "z", "o", not as one string.
+   */
+  legalSuffixes?: readonly string[];
 }): EscalationCheck<TInput, T> {
+  const suffixes = options.legalSuffixes ?? LEGAL_SUFFIXES;
+
   return (reply, input) => {
     const claimed = reply.value[options.field];
     if (typeof claimed !== "string" || claimed.trim() === "") {
@@ -61,7 +69,7 @@ export function whenUngrounded<TInput, T extends object>(options: {
       return null; // no text layer: nothing to compare against
     }
 
-    return contains(text, claimed)
+    return contains(text, claimed, suffixes)
       ? null
       : { code: "ungrounded", detail: `${options.field}="${claimed}" is not in the source text` };
   };
@@ -70,18 +78,30 @@ export function whenUngrounded<TInput, T extends object>(options: {
 /** Below this, the "text layer" is page furniture rather than content. */
 const MIN_TEXT_LENGTH = 40;
 
-/** Dropped from both sides: "ACME Corp." and "ACME CORPORATION" are one company. */
-const LEGAL_SUFFIXES = [
+/**
+ * Dropped from both sides before comparing, so "ACME Corp." grounds against a
+ * header reading "ACME CORPORATION". Pass your own list to `whenUngrounded` if
+ * your documents use forms this does not cover.
+ */
+export const LEGAL_SUFFIXES: readonly string[] = [
+  // Latin
   "corporation", "corp", "incorporated", "inc", "limited", "ltd", "llc", "llp",
   "gmbh", "ag", "bv", "nv", "oy", "ab", "as", "sa", "srl", "spa", "plc", "pte",
+  // Cyrillic. These lead the name as often as they trail it, so leaving them in
+  // makes the comparison depend on word order.
+  "ооо", "оао", "зао", "пао", "ао", "ип", "тоо", "тов", "фоп", "ано", "нко",
 ];
 
 /** Below this, a claim is a substring of almost any document. */
 const MIN_CLAIM_LENGTH = 2;
 
-function contains(haystack: string, needle: string): boolean {
-  const text = normalize(haystack);
-  const claim = normalize(needle);
+function contains(
+  haystack: string,
+  needle: string,
+  suffixes: readonly string[],
+): boolean {
+  const text = normalize(haystack, suffixes);
+  const claim = normalize(needle, suffixes);
 
   // One letter is a substring of almost any document, so it proves nothing.
   // A genuinely empty field is `missing-fields`, which runs before this check.
@@ -108,7 +128,10 @@ function spaceFree(value: string): string {
  * accents, punctuation and letter-spaced headings (`A C M E`), none of which
  * survive a naive `includes`.
  */
-export function normalize(value: string): string {
+export function normalize(
+  value: string,
+  suffixes: readonly string[] = LEGAL_SUFFIXES,
+): string {
   const flattened = value
     .normalize("NFKD")
     .replace(/\p{Diacritic}/gu, "")
@@ -120,7 +143,7 @@ export function normalize(value: string): string {
 
   const words = flattened
     .split(" ")
-    .filter((word) => word.length > 0 && !LEGAL_SUFFIXES.includes(word));
+    .filter((word) => word.length > 0 && !suffixes.includes(word));
 
   // Glue runs of single characters back together, so "a c m e" matches "acme".
   // A run of one is kept: it may be all that survives of a name like "E Corp".

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import {
   createLadder,
+  LEGAL_SUFFIXES,
   MissingPriceError,
   whenFieldsMissing,
   whenInvalid,
@@ -360,6 +361,35 @@ describe("grounding a field in the source text", () => {
     expect(outcome.status).toBe("escalated");
     if (outcome.status !== "escalated") return;
     expect(outcome.reason.code).toBe("ungrounded");
+  });
+
+  it("accepts a Cyrillic name whose legal form moved or appeared", async () => {
+    // `ООО` leads the name as often as it trails it, so word order must not
+    // decide whether the vendor counts as grounded.
+    const outcome = await ladder({
+      fast: reply({ vendor: "ООО Ромашка", total: 118 }),
+      escalateWhen: [grounded],
+    }).run({ text: longEnough("Счёт от компании Ромашка") });
+
+    expect(outcome.status).toBe("fast");
+  });
+
+  it("takes a suffix list of your own", async () => {
+    const polish = whenUngrounded<Doc, Extracted>({
+      field: "vendor",
+      sourceText: (doc) => doc.text,
+      // Entries are tokens as `normalize` produces them, so `sp. z o.o.`
+      // contributes "sp", "z" and "o" rather than one string.
+      legalSuffixes: [...LEGAL_SUFFIXES, "sp", "z", "o"],
+    });
+
+    const outcome = await ladder({
+      fast: reply({ vendor: "Kowalski sp. z o.o.", total: 118 }),
+      escalateWhen: [polish],
+      strong: reply({ vendor: "never", total: 0 }),
+    }).run({ text: longEnough("Faktura od Kowalski") });
+
+    expect(outcome.status).toBe("fast");
   });
 
   it("skips the check when the document has no text layer", async () => {

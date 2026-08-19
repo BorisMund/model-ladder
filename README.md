@@ -90,7 +90,7 @@ Plain functions returning a reason or `null`. Four ship with the package:
 `whenUngrounded` does most of the work, 41 of the 84 escalations above, and has the most edge cases:
 
 - **No text layer means skip, not escalate.** There is nothing to compare against, and escalating every photo would just make the strong model your default. A fifth of the corpus is photos, and they cost the cheap price.
-- **Legal suffixes and case are normalised away.** `ACME Corp.` against a header reading `ACME CORPORATION` is the same company. Without this, half the corpus escalates for nothing.
+- **Legal suffixes and case are normalised away.** `ACME Corp.` against a header reading `ACME CORPORATION` is the same company. Without this, half the corpus escalates for nothing. The built-in list covers Latin and Cyrillic forms; pass `legalSuffixes` to replace it, spreading the exported `LEGAL_SUFFIXES` to extend it instead.
 - **Letter-spaced headings are glued back together.** PDF text layers produce `A C M E` routinely. `G l o b e x   I n d u s t r i e s` also loses its word boundary, so the comparison is tried a second time with all spaces removed.
 - **Names too short to ground are left alone.** One letter appears in almost any document.
 - **Only verbatim fields work.** Totals (`1 234,56` vs `1234.56`) and dates get reformatted, so grounding them produces false alarms.
@@ -159,7 +159,7 @@ Left out on purpose:
 
 ```bash
 npm install
-npm test          # 22 tests, no network
+npm test          # 24 tests, no network
 npm run fixtures  # regenerate the corpus from the seed
 npm run simulate  # print the table above
 ```
