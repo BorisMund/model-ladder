@@ -142,7 +142,7 @@ export function createLadder<TInput, T>(
     } catch (error) {
       // A broken metrics sink must not cost the caller a document that was
       // already paid for. Log it rather than swallow it.
-      console.error("[model-ladder] onSpend threw and was ignored:", error);
+      console.error("[llm-ladder] onSpend threw and was ignored:", error);
     }
     return outcome;
   }

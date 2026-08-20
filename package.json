@@ -1,5 +1,5 @@
 {
-  "name": "model-ladder",
+  "name": "llm-ladder",
   "version": "0.1.0",
   "description": "Ask the cheap model first. Pay for the strong one only when the cheap answer fails a check, under a budget, with a cost record for every call.",
   "type": "module",
@@ -26,11 +26,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BorisMund/model-ladder.git"
+    "url": "git+https://github.com/BorisMund/llm-ladder.git"
   },
-  "homepage": "https://github.com/BorisMund/model-ladder#readme",
+  "homepage": "https://github.com/BorisMund/llm-ladder#readme",
   "bugs": {
-    "url": "https://github.com/BorisMund/model-ladder/issues"
+    "url": "https://github.com/BorisMund/llm-ladder/issues"
   },
   "sideEffects": false,
   "keywords": [

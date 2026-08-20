@@ -1,6 +1,6 @@
-# model-ladder
+# llm-ladder
 
-[![CI](https://github.com/BorisMund/model-ladder/actions/workflows/ci.yml/badge.svg)](https://github.com/BorisMund/model-ladder/actions/workflows/ci.yml)
+[![CI](https://github.com/BorisMund/llm-ladder/actions/workflows/ci.yml/badge.svg)](https://github.com/BorisMund/llm-ladder/actions/workflows/ci.yml)
 
 Ask the cheap model first. Pay for the strong one only when the cheap answer fails a check, under a budget, with a cost record for every call.
 
