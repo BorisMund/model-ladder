@@ -26,6 +26,29 @@ Ask the cheap model first. Pay for the strong one only when the cheap answer fai
 
 `npm run simulate` reproduces the table. The corpus is recorded rather than live; see [Where the numbers come from](#where-the-numbers-come-from).
 
+## One run
+
+The main path runs down; every way out goes right.
+
+```
+input
+  │
+  ▼
+cheap model ──── threw ─────▶ unavailable
+  │
+  ▼
+checks object? ── no ───────▶ fast
+  │ yes
+  ▼
+budget? ───────── spent ────▶ degraded
+  │ granted
+  ▼
+strong model ──── threw ────▶ degraded
+  │
+  ▼
+escalated
+```
+
 ## How it works
 
 ```ts
